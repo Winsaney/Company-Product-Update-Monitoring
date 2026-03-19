@@ -551,7 +551,7 @@ app.post('/api/summary/:repoId', async (req, res) => {
 });
 
 // ─── Start Server ──────────────────────────────────────────
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`\n🔍 GitHub Release Monitor 已启动`);
   console.log(`📡 访问 http://localhost:${PORT}\n`);
   setupCron();
