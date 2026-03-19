@@ -316,27 +316,55 @@ function renderRepos() {
 }
 
 function renderHistory() {
+  const allHistory = [...app.history];
+  
+  app.repos.forEach(repo => {
+    if (repo.lastRelease) {
+      const exists = allHistory.some(h => 
+        h.repoFullName === repo.fullName && h.tagName === repo.lastRelease.tagName
+      );
+      if (!exists) {
+        allHistory.push({
+          repoFullName: repo.fullName,
+          tagName: repo.lastRelease.tagName,
+          name: repo.lastRelease.name,
+          detectedAt: repo.lastRelease.publishedAt,
+          htmlUrl: repo.lastRelease.htmlUrl,
+          isExisting: true
+        });
+      }
+    }
+  });
+
+  allHistory.sort((a, b) => new Date(b.detectedAt || 0) - new Date(a.detectedAt || 0));
+
   return `
     <div class="page-header">
       <h2>更新历史</h2>
-      <p>所有检测到的新版本发布记录</p>
+      <p>检测到的新版本记录及现有仓库当前版本</p>
     </div>
 
-    ${app.history.length === 0 ? `
+    ${allHistory.length === 0 ? `
       <div class="empty-state">
         <div class="empty-state-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
         </div>
-        <h3>暂无更新记录</h3>
-        <p>当监控的仓库发布新版本时，会自动记录在这里</p>
+        <h3>暂无记录</h3>
+        <p>当有监控仓库且具备 Release 信息时，会显示在这里</p>
       </div>
     ` : `
       <div class="card-section">
-        ${app.history.map(item => `
+        ${allHistory.map(item => `
           <div class="history-item">
-            <div class="history-dot"></div>
+            <div class="history-dot ${item.isExisting ? 'history-dot-existing' : ''}"></div>
             <div class="history-content">
-              <h4>${item.repoFullName} → <span style="color: var(--accent-light)">${item.tagName}</span></h4>
+              <h4>
+                ${item.repoFullName} → <span style="color: var(--accent-light)">${item.tagName}</span>
+                ${item.isExisting 
+                  ? '<span style="font-size: 11px; font-weight: 500; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.1); color: var(--text-secondary); margin-left: 8px;">现有版本</span>' 
+                  : '<span style="font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 4px; background: rgba(16, 185, 129, 0.15); color: var(--success); margin-left: 8px;">新发布</span>'
+                }
+              </h4>
               <p>${item.name || item.tagName}</p>
             </div>
             <div class="history-time">
