@@ -114,7 +114,7 @@ const app = {
     const btn = document.getElementById('btn-test-llm');
     if (btn) {
       btn.disabled = true;
-      btn.innerHTML = '⏳ 测试中...';
+      btn.innerHTML = '<span class="spinning-inline"></span> 测试中...';
     }
     try {
       const result = await this.api('POST', '/api/test-llm');
@@ -124,7 +124,7 @@ const app = {
     } finally {
       if (btn) {
         btn.disabled = false;
-        btn.innerHTML = '🧪 测试 LLM 连接';
+        btn.innerHTML = '测试 LLM 连接';
       }
     }
   }
@@ -135,7 +135,12 @@ function showToast(message, type = 'info') {
   const container = document.getElementById('toast-container');
   const toast = document.createElement('div');
   toast.className = `toast ${type}`;
-  toast.innerHTML = `${type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️'} ${message}`;
+  const icon = type === 'success' 
+    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>'
+    : type === 'error'
+    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>'
+    : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><path stroke-linecap="round" stroke-linejoin="round" d="M12 16v-4m0-4h.01"/></svg>';
+  toast.innerHTML = `${icon} ${message}`;
   container.appendChild(toast);
   setTimeout(() => toast.remove(), 3000);
 }
@@ -184,7 +189,7 @@ function renderDashboard() {
 
     <div class="stats-bar">
       <div class="stat-card">
-        <div class="stat-icon purple">
+        <div class="stat-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
         </div>
         <div class="stat-info">
@@ -193,7 +198,7 @@ function renderDashboard() {
         </div>
       </div>
       <div class="stat-card">
-        <div class="stat-icon green">
+        <div class="stat-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.24 12.24a6 6 0 00-8.49-8.49L5 10.5V19h8.5z"/><line x1="16" y1="8" x2="2" y2="22"/><line x1="17.5" y1="15" x2="9" y2="15"/></svg>
         </div>
         <div class="stat-info">
@@ -202,7 +207,7 @@ function renderDashboard() {
         </div>
       </div>
       <div class="stat-card">
-        <div class="stat-icon blue">
+        <div class="stat-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         </div>
         <div class="stat-info">
@@ -211,7 +216,7 @@ function renderDashboard() {
         </div>
       </div>
       <div class="stat-card">
-        <div class="stat-icon pink">
+        <div class="stat-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
         </div>
         <div class="stat-info">
@@ -235,19 +240,19 @@ function renderDashboard() {
           <div class="repo-card" style="animation-delay: ${i * 0.05}s">
             <div class="repo-card-header">
               <div class="repo-name">
-                📦 <a href="https://github.com/${repo.fullName}" target="_blank" rel="noopener">${repo.fullName}</a>
+                <a href="https://github.com/${repo.fullName}" target="_blank" rel="noopener">${repo.fullName}</a>
               </div>
-              ${repo.error ? `<span class="repo-status error">⚠ 错误</span>` :
-                repo.lastRelease ? `<span class="repo-status ok">● 正常</span>` :
-                `<span class="repo-status none">○ 无Release</span>`}
+              ${repo.error ? `<span class="repo-status error">错误</span>` :
+                repo.lastRelease ? `<span class="repo-status ok">正常</span>` :
+                `<span class="repo-status none">无 Release</span>`}
             </div>
             ${repo.lastRelease ? `
               <div class="repo-release">
                 <div class="repo-release-tag">${repo.lastRelease.tagName}</div>
                 <div class="repo-release-meta">
-                  <span>📌 ${repo.lastRelease.name}</span>
-                  <span>🕐 ${timeAgo(repo.lastRelease.publishedAt)}</span>
-                  <span>👤 ${repo.lastRelease.author}</span>
+                  <span>${repo.lastRelease.name}</span>
+                  <span>${timeAgo(repo.lastRelease.publishedAt)}</span>
+                  <span>${repo.lastRelease.author}</span>
                 </div>
                 ${repo.lastRelease.body ? `
                   <div class="repo-release-body">${escapeHtml(repo.lastRelease.body.substring(0, 300))}</div>
@@ -260,7 +265,7 @@ function renderDashboard() {
             `}
             <div class="repo-card-footer">
               <span>最后检查: ${timeAgo(repo.lastChecked)}</span>
-              ${repo.lastRelease ? `<a href="${repo.lastRelease.htmlUrl}" target="_blank" rel="noopener" style="color: var(--accent-light); text-decoration: none; font-weight: 500;">查看 Release →</a>` : ''}
+              ${repo.lastRelease ? `<a href="${repo.lastRelease.htmlUrl}" target="_blank" rel="noopener">查看 Release</a>` : ''}
             </div>
           </div>
         `).join('')}
@@ -277,7 +282,7 @@ function renderRepos() {
     </div>
 
     <div class="add-repo-section">
-      <h3>➕ 添加仓库</h3>
+      <h3>添加仓库</h3>
       <div class="form-inline" style="margin-top: 12px;">
         <input type="text" id="input-repo" class="form-input" placeholder="输入仓库名称，如: facebook/react" onkeydown="if(event.key==='Enter') addRepoHandler()">
         <button class="btn btn-primary" onclick="addRepoHandler()">添加</button>
@@ -296,11 +301,10 @@ function renderRepos() {
       <div>
         ${app.repos.map((repo, i) => {
           const initial = repo.fullName.split('/')[0][0].toUpperCase();
-          const gradients = ['var(--gradient-1)', 'var(--gradient-2)', 'var(--gradient-3)', 'var(--gradient-4)'];
           return `
             <div class="repo-list-item" style="animation-delay: ${i * 0.05}s">
               <div class="repo-list-info">
-                <div class="repo-avatar" style="background: ${gradients[i % 4]}">${initial}</div>
+                <div class="repo-avatar">${initial}</div>
                 <div class="repo-detail">
                   <h4>${repo.fullName}</h4>
                   <p>${repo.lastRelease ? `最新版本: ${repo.lastRelease.tagName} · ${timeAgo(repo.lastRelease.publishedAt)}` : '暂无 Release'}</p>
@@ -336,12 +340,12 @@ function renderHistory() {
           <div class="history-item">
             <div class="history-dot"></div>
             <div class="history-content">
-              <h4>${item.repoFullName} → <span style="color: var(--accent-light)">${item.tagName}</span></h4>
+              <h4>${item.repoFullName} → <span>${item.tagName}</span></h4>
               <p>${item.name || item.tagName}</p>
             </div>
             <div class="history-time">
               <div>${formatDate(item.detectedAt)}</div>
-              <a href="${item.htmlUrl}" target="_blank" rel="noopener" style="color: var(--accent-light); text-decoration: none; font-size: 11px;">查看 →</a>
+              <a href="${item.htmlUrl}" target="_blank" rel="noopener">查看</a>
             </div>
           </div>
         `).join('')}
@@ -365,7 +369,7 @@ function renderSummary() {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a4 4 0 014 4c0 1.95-1.4 3.58-3.25 3.93L12 10l-.75-.07A4.001 4.001 0 0112 2z"/><path d="M9 10h6v2a3 3 0 01-6 0v-2z"/><path d="M8 18h8"/><path d="M9 21h6"/></svg>
         </div>
         <h3>未配置 AI 大模型</h3>
-        <p>请先前往 <a href="#/settings" style="color: var(--accent-light)">设置</a> 页面配置 AI 大模型的 API 地址和 Key</p>
+        <p>请先前往 <a href="#/settings">设置</a> 页面配置 AI 大模型的 API 地址和 Key</p>
       </div>
     ` : app.repos.length === 0 ? `
       <div class="empty-state">
@@ -384,12 +388,12 @@ function renderSummary() {
             <div class="summary-card" style="animation-delay: ${i * 0.06}s">
               <div class="summary-card-header">
                 <div>
-                  <h3 class="summary-repo-name">📦 ${repo.fullName}</h3>
-                  ${repo.lastRelease ? `<span class="summary-tag">${repo.lastRelease.tagName}</span> <span style="font-size: 12px; color: var(--text-muted); margin-left: 8px;">🕒 更新于 ${timeAgo(repo.lastRelease.publishedAt)}</span>` : ''}
+                  <h3 class="summary-repo-name">${repo.fullName}</h3>
+                  ${repo.lastRelease ? `<span class="summary-tag">${repo.lastRelease.tagName}</span> <span style="font-size: 12px; color: var(--text-muted); margin-left: 8px;">更新于 ${timeAgo(repo.lastRelease.publishedAt)}</span>` : ''}
                 </div>
                 ${hasRelease ? `
                   <button class="btn btn-sm ${summary ? 'btn-secondary' : 'btn-primary'}" id="btn-summary-${repo.id}" onclick="generateSummaryHandler('${repo.id}')">
-                    ${summary ? '🔄 重新生成' : '✨ 生成总结'}
+                    ${summary ? '重新生成' : '生成总结'}
                   </button>
                 ` : ''}
               </div>
@@ -397,7 +401,7 @@ function renderSummary() {
               ${summary ? `
                 <details class="summary-content" open>
                   <summary class="summary-content-label" style="cursor: pointer; user-select: none; margin-bottom: 0;">
-                    <div>🤖 AI 总结 <span style="color: var(--text-muted); font-weight: 400;">· ${timeAgo(summary.generatedAt)}</span></div>
+                    <div>AI 总结 <span style="color: var(--text-muted); font-weight: 400;">· ${timeAgo(summary.generatedAt)}</span></div>
                   </summary>
                   <div class="summary-body" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);">${renderMarkdown(summary.content)}</div>
                 </details>
@@ -405,12 +409,12 @@ function renderSummary() {
 
               ${hasRelease ? `
                 <details class="summary-original">
-                  <summary>📄 查看原始 Release Notes</summary>
+                  <summary>查看原始 Release Notes</summary>
                   <div class="summary-original-body">${escapeHtml(repo.lastRelease.body)}</div>
                 </details>
               ` : `
                 <div style="color: var(--text-muted); font-size: 13px; padding: 20px 0;">
-                  ${repo.error ? '⚠ 错误: ' + repo.error : '该仓库暂无 Release Notes'}
+                  ${repo.error ? '错误: ' + repo.error : '该仓库暂无 Release Notes'}
                 </div>
               `}
             </div>
@@ -518,9 +522,9 @@ function renderSettings() {
     </div>
 
     <div style="display: flex; gap: 12px; margin-top: 8px;">
-      <button class="btn btn-primary" onclick="saveSettingsHandler()">💾 保存设置</button>
-      <button class="btn btn-secondary" onclick="app.testEmail()">📧 发送测试邮件</button>
-      <button class="btn btn-secondary" id="btn-test-llm" onclick="app.testLLM()">🧪 测试 LLM 连接</button>
+      <button class="btn btn-primary" onclick="saveSettingsHandler()">保存设置</button>
+      <button class="btn btn-secondary" onclick="app.testEmail()">发送测试邮件</button>
+      <button class="btn btn-secondary" id="btn-test-llm" onclick="app.testLLM()">测试 LLM 连接</button>
     </div>
   `;
 }
@@ -629,7 +633,7 @@ async function generateSummaryHandler(repoId) {
   const btn = document.getElementById(`btn-summary-${repoId}`);
   if (btn) {
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinning-inline">⏳</span> 生成中...';
+    btn.innerHTML = '<span class="spinning-inline"></span> 生成中...';
   }
   try {
     await app.generateSummary(repoId);
@@ -639,7 +643,7 @@ async function generateSummaryHandler(repoId) {
     showToast('生成失败: ' + err.message, 'error');
     if (btn) {
       btn.disabled = false;
-      btn.innerHTML = '✨ 生成总结';
+      btn.innerHTML = '生成总结';
     }
   }
 }
@@ -652,7 +656,7 @@ async function loginHandler() {
 
   if (btn) {
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinning-inline">⏳</span> 登录中...';
+    btn.innerHTML = '<span class="spinning-inline"></span> 登录中...';
   }
 
   try {
