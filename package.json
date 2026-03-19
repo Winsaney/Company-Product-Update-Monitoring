@@ -1,0 +1,16 @@
+{
+  "name": "github-release-monitor",
+  "version": "1.0.0",
+  "description": "GitHub Release 自动监测工具",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "node-cron": "^3.0.3",
+    "nodemailer": "^6.9.8",
+    "node-fetch": "^2.7.0"
+  }
+}
