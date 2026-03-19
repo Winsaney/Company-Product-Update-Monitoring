@@ -4,10 +4,14 @@ const nodemailer = require('nodemailer');
 const fetch = require('node-fetch');
 const fs = require('fs');
 const path = require('path');
+const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
+const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
 
 // Ensure data directory exists
 if (!fs.existsSync(DATA_DIR)) {
@@ -299,6 +303,34 @@ function setupCron() {
 
   console.log(`⏰ 定时任务已设置：每 ${days} 天检查一次（每日 9:00）`);
 }
+
+// ─── Authentication ──────────────────────────────────────────
+
+app.post('/api/login', (req, res) => {
+  const { password } = req.body;
+  if (password === ADMIN_PASSWORD) {
+    const token = jwt.sign({ role: 'admin' }, JWT_SECRET, { expiresIn: '7d' });
+    res.json({ success: true, token });
+  } else {
+    res.status(401).json({ error: '密码错误' });
+  }
+});
+
+const authMiddleware = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader) return res.status(401).json({ error: '未授权，请先登录' });
+
+  const token = authHeader.split(' ')[1];
+  if (!token) return res.status(401).json({ error: '未授权，请先登录' });
+
+  jwt.verify(token, JWT_SECRET, (err, decoded) => {
+    if (err) return res.status(401).json({ error: '登录已过期，请重新登录' });
+    req.user = decoded;
+    next();
+  });
+};
+
+app.use('/api', authMiddleware);
 
 // ─── API Routes ──────────────────────────────────────────
 

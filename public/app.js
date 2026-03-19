@@ -7,11 +7,38 @@ const app = {
 
   async api(method, url, body) {
     const opts = { method, headers: { 'Content-Type': 'application/json' } };
+    
+    const token = localStorage.getItem('token');
+    if (token) {
+      opts.headers['Authorization'] = `Bearer ${token}`;
+    }
+
     if (body) opts.body = JSON.stringify(body);
     const res = await fetch(url, opts);
     const data = await res.json();
+    
+    if (res.status === 401 && url !== '/api/login') {
+      localStorage.removeItem('token');
+      window.location.hash = '#/login';
+      throw new Error(data.error || 'Request failed');
+    }
+
     if (!res.ok) throw new Error(data.error || 'Request failed');
     return data;
+  },
+
+  async login(password) {
+    const data = await this.api('POST', '/api/login', { password });
+    if (data.token) {
+      localStorage.setItem('token', data.token);
+      return true;
+    }
+    return false;
+  },
+
+  logout() {
+    localStorage.removeItem('token');
+    window.location.hash = '#/login';
   },
 
   async loadRepos() {
@@ -368,10 +395,12 @@ function renderSummary() {
               </div>
 
               ${summary ? `
-                <div class="summary-content">
-                  <div class="summary-content-label">🤖 AI 总结 <span style="color: var(--text-muted); font-weight: 400;">· ${timeAgo(summary.generatedAt)}</span></div>
-                  <div class="summary-body">${renderMarkdown(summary.content)}</div>
-                </div>
+                <details class="summary-content" open>
+                  <summary class="summary-content-label" style="cursor: pointer; user-select: none; margin-bottom: 0;">
+                    <div>🤖 AI 总结 <span style="color: var(--text-muted); font-weight: 400;">· ${timeAgo(summary.generatedAt)}</span></div>
+                  </summary>
+                  <div class="summary-body" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);">${renderMarkdown(summary.content)}</div>
+                </details>
               ` : ''}
 
               ${hasRelease ? `
@@ -496,6 +525,29 @@ function renderSettings() {
   `;
 }
 
+function renderLogin() {
+  return `
+    <div class="login-container">
+      <div class="login-box">
+        <div class="login-logo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 6v6l4 2"/>
+          </svg>
+        </div>
+        <h2 style="text-align: center; margin-bottom: 8px;">万象企业版</h2>
+        <p style="text-align: center; color: var(--text-muted); margin-bottom: 24px;">验证后进入监控系统</p>
+        <form onsubmit="event.preventDefault(); loginHandler();">
+          <div class="form-group">
+            <input type="password" id="input-password" class="form-input" placeholder="请输入管理员密码..." required autofocus style="text-align: center; letter-spacing: 2px;">
+          </div>
+          <button type="submit" id="btn-login" class="btn btn-primary" style="width: 100%; justify-content: center; margin-top: 8px;">登 录</button>
+        </form>
+      </div>
+    </div>
+  `;
+}
+
 // ─── Event Handlers ──────────────────────────────────────────
 
 async function addRepoHandler() {
@@ -592,6 +644,40 @@ async function generateSummaryHandler(repoId) {
   }
 }
 
+async function loginHandler() {
+  const pwdInput = document.getElementById('input-password');
+  const btn = document.getElementById('btn-login');
+  const password = pwdInput.value;
+  if (!password) return;
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinning-inline">⏳</span> 登录中...';
+  }
+
+  try {
+    const success = await app.login(password);
+    if (success) {
+      window.location.hash = '#/';
+      // Load initial data after login
+      await Promise.all([
+        app.loadRepos(),
+        app.loadSettings(),
+        app.loadHistory(),
+        app.loadSummaries()
+      ]);
+      router.render();
+      showToast('登录成功', 'success');
+    }
+  } catch (err) {
+    showToast(err.message, 'error');
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '登 录';
+    }
+  }
+}
+
 // ─── Router ──────────────────────────────────────────
 const router = {
   routes: {
@@ -599,12 +685,32 @@ const router = {
     '/repos': renderRepos,
     '/history': renderHistory,
     '/summary': renderSummary,
-    '/settings': renderSettings
+    '/settings': renderSettings,
+    '/login': renderLogin
   },
 
   render() {
     const hash = window.location.hash.replace('#', '') || '/';
+    
+    const token = localStorage.getItem('token');
+    if (!token && hash !== '/login') {
+      window.location.hash = '#/login';
+      return;
+    }
+
     const view = this.routes[hash] || renderDashboard;
+    
+    const sidebar = document.getElementById('sidebar');
+    const appEl = document.querySelector('.app');
+    
+    if (hash === '/login') {
+      if (sidebar) sidebar.style.display = 'none';
+      if (appEl) appEl.classList.add('is-login');
+    } else {
+      if (sidebar) sidebar.style.display = 'flex';
+      if (appEl) appEl.classList.remove('is-login');
+    }
+
     document.getElementById('view-container').innerHTML = view();
 
     // Update active nav
@@ -621,15 +727,21 @@ const router = {
 window.addEventListener('hashchange', () => router.render());
 
 (async function init() {
-  try {
-    await Promise.all([
-      app.loadRepos(),
-      app.loadSettings(),
-      app.loadHistory(),
-      app.loadSummaries()
-    ]);
-  } catch (err) {
-    console.error('初始化失败:', err);
+  const token = localStorage.getItem('token');
+  if (token) {
+    try {
+      await Promise.all([
+        app.loadRepos(),
+        app.loadSettings(),
+        app.loadHistory(),
+        app.loadSummaries()
+      ]);
+    } catch (err) {
+      console.error('初始化失败:', err);
+      if (err.message.includes('未授权') || err.message.includes('过期')) {
+        app.logout();
+      }
+    }
   }
   router.render();
 })();
