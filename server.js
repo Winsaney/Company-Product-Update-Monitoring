@@ -52,6 +52,11 @@ function getSettings() {
       smtp: { host: '', port: 465, secure: true, user: '', pass: '' },
       from: '',
       to: ''
+    },
+    llm: {
+      apiUrl: '',
+      apiKey: '',
+      model: 'gpt-3.5-turbo'
     }
   });
 }
@@ -70,6 +75,16 @@ function addHistory(entry) {
   // Keep last 200 entries
   if (history.length > 200) history.length = 200;
   saveJSON('history.json', history);
+}
+
+function getSummaries() {
+  return loadJSON('summaries.json', {});
+}
+
+function saveSummary(repoId, summary) {
+  const summaries = getSummaries();
+  summaries[repoId] = summary;
+  saveJSON('summaries.json', summaries);
 }
 
 // ─── GitHub API ──────────────────────────────────────────
@@ -103,6 +118,61 @@ async function fetchLatestRelease(owner, repo, token) {
     htmlUrl: data.html_url,
     author: data.author ? data.author.login : 'unknown'
   };
+}
+
+// ─── LLM API (OpenAI Compatible) ──────────────────────────────────────────
+function normalizeApiUrl(url) {
+  // Auto-append /chat/completions if user provided base URL
+  url = url.trim().replace(/\/+$/, ''); // remove trailing slashes
+  if (!url.endsWith('/chat/completions')) {
+    if (url.endsWith('/v1') || url.endsWith('/v1/')) {
+      url += '/chat/completions';
+    } else if (!url.includes('/chat/completions')) {
+      url += '/v1/chat/completions';
+    }
+  }
+  return url;
+}
+
+async function callLLM(prompt, settings) {
+  const { llm } = settings;
+  if (!llm || !llm.apiUrl || !llm.apiKey) {
+    throw new Error('请先在设置中配置 AI 大模型的 API 地址和 Key');
+  }
+
+  const apiUrl = normalizeApiUrl(llm.apiUrl);
+  let modelName = llm.model || 'gpt-3.5-turbo';
+  if (modelName.toLowerCase().includes('deepseek')) {
+    modelName = modelName.toLowerCase();
+  }
+
+  const response = await fetch(apiUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${llm.apiKey}`
+    },
+    body: JSON.stringify({
+      model: modelName,
+      messages: [
+        { role: 'system', content: '你是一个专业的技术文档分析助手。请用简洁的中文总结 GitHub Release Notes 的主要内容，包括新功能、bug 修复、破坏性变更等要点。输出格式为 Markdown，使用要点列表。' },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.3,
+      max_tokens: 1000
+    })
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`LLM API 错误 ${response.status}: ${text}`);
+  }
+
+  const data = await response.json();
+  if (!data.choices || !data.choices[0]) {
+    throw new Error('LLM API 返回格式异常');
+  }
+  return data.choices[0].message.content;
 }
 
 // ─── Email ──────────────────────────────────────────
@@ -314,6 +384,9 @@ app.get('/api/settings', (req, res) => {
   if (masked.githubToken) {
     masked.githubToken = masked.githubToken.substring(0, 8) + '********';
   }
+  if (masked.llm?.apiKey) {
+    masked.llm.apiKey = masked.llm.apiKey.substring(0, 8) + '********';
+  }
   res.json(masked);
 });
 
@@ -328,6 +401,9 @@ app.post('/api/settings', (req, res) => {
   }
   if (incoming.githubToken?.endsWith('********')) {
     incoming.githubToken = current.githubToken;
+  }
+  if (incoming.llm?.apiKey?.endsWith('********')) {
+    incoming.llm.apiKey = current.llm?.apiKey || '';
   }
 
   saveSettings(incoming);
@@ -382,6 +458,64 @@ app.post('/api/test-email', async (req, res) => {
 // Get history
 app.get('/api/history', (req, res) => {
   res.json(getHistory());
+});
+
+// ─── AI Summary Routes ──────────────────────────────────────────
+
+// Get all summaries
+app.get('/api/summaries', (req, res) => {
+  res.json(getSummaries());
+});
+
+// Test LLM API
+app.post('/api/test-llm', async (req, res) => {
+  const settings = getSettings();
+  const { llm } = settings;
+
+  if (!llm || !llm.apiUrl || !llm.apiKey) {
+    return res.status(400).json({ error: '请先配置 AI 大模型的 API 地址和 Key' });
+  }
+
+  try {
+    const content = await callLLM('请用一句话介绍你自己。', settings);
+    res.json({ success: true, message: `LLM 连接成功！模型回复：${content}` });
+  } catch (err) {
+    res.status(500).json({ error: `LLM 连接失败：${err.message}` });
+  }
+});
+
+// Generate summary for a repo
+app.post('/api/summary/:repoId', async (req, res) => {
+  const repos = getRepos();
+  const repo = repos.find(r => r.id === req.params.repoId);
+
+  if (!repo) {
+    return res.status(404).json({ error: '仓库不存在' });
+  }
+
+  if (!repo.lastRelease || !repo.lastRelease.body) {
+    return res.status(400).json({ error: '该仓库暂无 Release Notes 内容可总结' });
+  }
+
+  const settings = getSettings();
+
+  try {
+    const prompt = `以下是 GitHub 仓库 ${repo.fullName} 的 Release ${repo.lastRelease.tagName} (${repo.lastRelease.name}) 的 Release Notes：\n\n${repo.lastRelease.body}`;
+    const content = await callLLM(prompt, settings);
+
+    const summary = {
+      repoFullName: repo.fullName,
+      tagName: repo.lastRelease.tagName,
+      releaseName: repo.lastRelease.name,
+      content,
+      generatedAt: new Date().toISOString()
+    };
+
+    saveSummary(repo.id, summary);
+    res.json(summary);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ─── Start Server ──────────────────────────────────────────

@@ -3,6 +3,7 @@ const app = {
   repos: [],
   settings: {},
   history: [],
+  summaries: {},
 
   async api(method, url, body) {
     const opts = { method, headers: { 'Content-Type': 'application/json' } };
@@ -23,6 +24,16 @@ const app = {
 
   async loadHistory() {
     this.history = await this.api('GET', '/api/history');
+  },
+
+  async loadSummaries() {
+    this.summaries = await this.api('GET', '/api/summaries');
+  },
+
+  async generateSummary(repoId) {
+    const summary = await this.api('POST', `/api/summary/${repoId}`);
+    this.summaries[repoId] = summary;
+    return summary;
   },
 
   async addRepo(fullName) {
@@ -69,6 +80,25 @@ const app = {
       showToast(result.message, 'success');
     } catch (err) {
       showToast(err.message, 'error');
+    }
+  },
+
+  async testLLM() {
+    const btn = document.getElementById('btn-test-llm');
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '⏳ 测试中...';
+    }
+    try {
+      const result = await this.api('POST', '/api/test-llm');
+      showToast(result.message, 'success');
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '🧪 测试 LLM 连接';
+      }
     }
   }
 };
@@ -293,6 +323,75 @@ function renderHistory() {
   `;
 }
 
+function renderSummary() {
+  const hasLLM = app.settings.llm && app.settings.llm.apiUrl && app.settings.llm.apiKey;
+
+  return `
+    <div class="page-header">
+      <h2>AI 智能总结</h2>
+      <p>使用大模型自动总结每个仓库最新 Release 的主要变更内容</p>
+    </div>
+
+    ${!hasLLM ? `
+      <div class="empty-state">
+        <div class="empty-state-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a4 4 0 014 4c0 1.95-1.4 3.58-3.25 3.93L12 10l-.75-.07A4.001 4.001 0 0112 2z"/><path d="M9 10h6v2a3 3 0 01-6 0v-2z"/><path d="M8 18h8"/><path d="M9 21h6"/></svg>
+        </div>
+        <h3>未配置 AI 大模型</h3>
+        <p>请先前往 <a href="#/settings" style="color: var(--accent-light)">设置</a> 页面配置 AI 大模型的 API 地址和 Key</p>
+      </div>
+    ` : app.repos.length === 0 ? `
+      <div class="empty-state">
+        <div class="empty-state-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+        </div>
+        <h3>暂无监控仓库</h3>
+        <p>前往「仓库管理」添加想要监控的 GitHub 仓库</p>
+      </div>
+    ` : `
+      <div class="summary-grid">
+        ${app.repos.map((repo, i) => {
+          const summary = app.summaries[repo.id];
+          const hasRelease = repo.lastRelease && repo.lastRelease.body;
+          return `
+            <div class="summary-card" style="animation-delay: ${i * 0.06}s">
+              <div class="summary-card-header">
+                <div>
+                  <h3 class="summary-repo-name">📦 ${repo.fullName}</h3>
+                  ${repo.lastRelease ? `<span class="summary-tag">${repo.lastRelease.tagName}</span> <span style="font-size: 12px; color: var(--text-muted); margin-left: 8px;">🕒 更新于 ${timeAgo(repo.lastRelease.publishedAt)}</span>` : ''}
+                </div>
+                ${hasRelease ? `
+                  <button class="btn btn-sm ${summary ? 'btn-secondary' : 'btn-primary'}" id="btn-summary-${repo.id}" onclick="generateSummaryHandler('${repo.id}')">
+                    ${summary ? '🔄 重新生成' : '✨ 生成总结'}
+                  </button>
+                ` : ''}
+              </div>
+
+              ${summary ? `
+                <div class="summary-content">
+                  <div class="summary-content-label">🤖 AI 总结 <span style="color: var(--text-muted); font-weight: 400;">· ${timeAgo(summary.generatedAt)}</span></div>
+                  <div class="summary-body">${renderMarkdown(summary.content)}</div>
+                </div>
+              ` : ''}
+
+              ${hasRelease ? `
+                <details class="summary-original">
+                  <summary>📄 查看原始 Release Notes</summary>
+                  <div class="summary-original-body">${escapeHtml(repo.lastRelease.body)}</div>
+                </details>
+              ` : `
+                <div style="color: var(--text-muted); font-size: 13px; padding: 20px 0;">
+                  ${repo.error ? '⚠ 错误: ' + repo.error : '该仓库暂无 Release Notes'}
+                </div>
+              `}
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `}
+  `;
+}
+
 function renderSettings() {
   const s = app.settings;
   const email = s.email || { enabled: false, smtp: { host: '', port: 465, secure: true, user: '', pass: '' }, from: '', to: '' };
@@ -368,9 +467,31 @@ function renderSettings() {
       </div>
     </div>
 
+    <div class="card-section">
+      <div class="card-section-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a4 4 0 014 4c0 1.95-1.4 3.58-3.25 3.93L12 10l-.75-.07A4.001 4.001 0 0112 2z"/><path d="M9 10h6v2a3 3 0 01-6 0v-2z"/><path d="M8 18h8"/><path d="M9 21h6"/></svg>
+        AI 大模型
+      </div>
+      <div class="form-group">
+        <label>API 地址（OpenAI 兼容格式）</label>
+        <input type="text" id="set-llm-url" class="form-input" placeholder="https://api.openai.com/v1/chat/completions" value="${s.llm?.apiUrl || ''}">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>API Key</label>
+          <input type="password" id="set-llm-key" class="form-input" placeholder="sk-xxxxxxxxxxxx" value="${s.llm?.apiKey || ''}">
+        </div>
+        <div class="form-group">
+          <label>模型名称</label>
+          <input type="text" id="set-llm-model" class="form-input" placeholder="gpt-3.5-turbo" value="${s.llm?.model || 'gpt-3.5-turbo'}">
+        </div>
+      </div>
+    </div>
+
     <div style="display: flex; gap: 12px; margin-top: 8px;">
       <button class="btn btn-primary" onclick="saveSettingsHandler()">💾 保存设置</button>
       <button class="btn btn-secondary" onclick="app.testEmail()">📧 发送测试邮件</button>
+      <button class="btn btn-secondary" id="btn-test-llm" onclick="app.testLLM()">🧪 测试 LLM 连接</button>
     </div>
   `;
 }
@@ -418,6 +539,11 @@ async function saveSettingsHandler() {
       },
       from: document.getElementById('set-email-from').value,
       to: document.getElementById('set-email-to').value
+    },
+    llm: {
+      apiUrl: document.getElementById('set-llm-url').value,
+      apiKey: document.getElementById('set-llm-key').value,
+      model: document.getElementById('set-llm-model').value || 'gpt-3.5-turbo'
     }
   };
 
@@ -435,12 +561,44 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+function renderMarkdown(text) {
+  // Simple markdown rendering for summary content
+  return escapeHtml(text)
+    .replace(/^### (.+)$/gm, '<h4>$1</h4>')
+    .replace(/^## (.+)$/gm, '<h3 style="font-size:14px;margin:12px 0 6px;">$1</h3>')
+    .replace(/^# (.+)$/gm, '<h3 style="font-size:15px;margin:12px 0 6px;">$1</h3>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/`(.+?)`/g, '<code style="background:var(--bg-tertiary);padding:1px 5px;border-radius:3px;font-size:12px;">$1</code>')
+    .replace(/^[\-\*] (.+)$/gm, '<li style="margin-left:16px;margin-bottom:4px;">$1</li>')
+    .replace(/\n/g, '<br>');
+}
+
+async function generateSummaryHandler(repoId) {
+  const btn = document.getElementById(`btn-summary-${repoId}`);
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinning-inline">⏳</span> 生成中...';
+  }
+  try {
+    await app.generateSummary(repoId);
+    showToast('总结生成成功', 'success');
+    router.render();
+  } catch (err) {
+    showToast('生成失败: ' + err.message, 'error');
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '✨ 生成总结';
+    }
+  }
+}
+
 // ─── Router ──────────────────────────────────────────
 const router = {
   routes: {
     '/': renderDashboard,
     '/repos': renderRepos,
     '/history': renderHistory,
+    '/summary': renderSummary,
     '/settings': renderSettings
   },
 
@@ -467,7 +625,8 @@ window.addEventListener('hashchange', () => router.render());
     await Promise.all([
       app.loadRepos(),
       app.loadSettings(),
-      app.loadHistory()
+      app.loadHistory(),
+      app.loadSummaries()
     ]);
   } catch (err) {
     console.error('初始化失败:', err);
