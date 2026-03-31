@@ -5,6 +5,41 @@ const app = {
   history: [],
   summaries: {},
   weeklySummaries: [],
+  theme: 'dark',
+
+  initTheme() {
+    const saved = localStorage.getItem('theme');
+    if (saved) {
+      this.theme = saved;
+    } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+      this.theme = 'light';
+    }
+    this.applyTheme();
+  },
+
+  toggleTheme() {
+    this.theme = this.theme === 'dark' ? 'light' : 'dark';
+    localStorage.setItem('theme', this.theme);
+    this.applyTheme();
+  },
+
+  applyTheme() {
+    document.documentElement.setAttribute('data-theme', this.theme);
+    const textEl = document.getElementById('theme-toggle-text');
+    const moonIcon = document.getElementById('theme-icon-moon');
+    const sunIcon = document.getElementById('theme-icon-sun');
+    if (textEl && moonIcon && sunIcon) {
+      if (this.theme === 'light') {
+        textEl.textContent = '深色模式';
+        moonIcon.style.display = 'none';
+        sunIcon.style.display = 'inline-block';
+      } else {
+        textEl.textContent = '浅色模式';
+        moonIcon.style.display = 'inline-block';
+        sunIcon.style.display = 'none';
+      }
+    }
+  },
 
   async api(method, url, body) {
     const opts = { method, headers: { 'Content-Type': 'application/json' } };
@@ -855,6 +890,7 @@ const router = {
 window.addEventListener('hashchange', () => router.render());
 
 (async function init() {
+  app.initTheme();
   const token = localStorage.getItem('token');
   if (token) {
     try {

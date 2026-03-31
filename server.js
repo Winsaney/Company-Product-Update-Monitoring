@@ -249,24 +249,24 @@ async function sendEmailNotification(repo, release, settings) {
     : '无 Release Notes';
 
   const html = `
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 600px; margin: 0 auto; background: #1a1a2e; color: #e0e0e0; border-radius: 12px; overflow: hidden;">
-      <div style="background: linear-gradient(135deg, #667eea, #764ba2); padding: 24px 32px;">
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 600px; margin: 0 auto; background: #1C1917; color: #FAF9F7; border-radius: 12px; overflow: hidden;">
+      <div style="background: linear-gradient(135deg, #C96B42, #E8927C); padding: 24px 32px;">
         <h1 style="margin: 0; font-size: 20px; color: white;">🚀 新版本发布</h1>
       </div>
       <div style="padding: 24px 32px;">
-        <table style="width: 100%; border-collapse: collapse; color: #e0e0e0;">
-          <tr><td style="padding: 8px 0; color: #888;">仓库</td><td style="padding: 8px 0; font-weight: 600;">${repo.fullName}</td></tr>
-          <tr><td style="padding: 8px 0; color: #888;">版本</td><td style="padding: 8px 0; font-weight: 600; color: #667eea;">${release.tagName}</td></tr>
-          <tr><td style="padding: 8px 0; color: #888;">名称</td><td style="padding: 8px 0;">${release.name}</td></tr>
-          <tr><td style="padding: 8px 0; color: #888;">发布时间</td><td style="padding: 8px 0;">${new Date(release.publishedAt).toLocaleString('zh-CN')}</td></tr>
-          <tr><td style="padding: 8px 0; color: #888;">发布者</td><td style="padding: 8px 0;">${release.author}</td></tr>
+        <table style="width: 100%; border-collapse: collapse; color: #FAF9F7;">
+          <tr><td style="padding: 8px 0; color: #A8A29E;">仓库</td><td style="padding: 8px 0; font-weight: 600;">${repo.fullName}</td></tr>
+          <tr><td style="padding: 8px 0; color: #A8A29E;">版本</td><td style="padding: 8px 0; font-weight: 600; color: #E8927C;">${release.tagName}</td></tr>
+          <tr><td style="padding: 8px 0; color: #A8A29E;">名称</td><td style="padding: 8px 0;">${release.name}</td></tr>
+          <tr><td style="padding: 8px 0; color: #A8A29E;">发布时间</td><td style="padding: 8px 0;">${new Date(release.publishedAt).toLocaleString('zh-CN')}</td></tr>
+          <tr><td style="padding: 8px 0; color: #A8A29E;">发布者</td><td style="padding: 8px 0;">${release.author}</td></tr>
         </table>
-        <div style="margin-top: 16px; padding: 16px; background: #16213e; border-radius: 8px; border-left: 3px solid #667eea;">
-          <p style="margin: 0 0 8px; color: #888; font-size: 13px;">Release Notes</p>
-          <pre style="margin: 0; white-space: pre-wrap; word-break: break-word; font-size: 13px; color: #ccc;">${bodyPreview}</pre>
+        <div style="margin-top: 16px; padding: 16px; background: #0C0A09; border-radius: 8px; border-left: 3px solid #CF7C5E;">
+          <p style="margin: 0 0 8px; color: #A8A29E; font-size: 13px;">Release Notes</p>
+          <pre style="margin: 0; white-space: pre-wrap; word-break: break-word; font-size: 13px; color: #D4C5B0;">${bodyPreview}</pre>
         </div>
         <div style="margin-top: 24px; text-align: center;">
-          <a href="${release.htmlUrl}" style="display: inline-block; background: linear-gradient(135deg, #667eea, #764ba2); color: white; text-decoration: none; padding: 10px 24px; border-radius: 8px; font-weight: 600;">查看 Release →</a>
+          <a href="${release.htmlUrl}" style="display: inline-block; background: linear-gradient(135deg, #C96B42, #E8927C); color: white; text-decoration: none; padding: 10px 24px; border-radius: 8px; font-weight: 600;">查看 Release →</a>
         </div>
       </div>
     </div>
