@@ -416,18 +416,18 @@ function renderSummary() {
                   ${repo.lastRelease ? `<span class="summary-tag">${repo.lastRelease.tagName}</span> <span style="font-size: 12px; color: var(--text-muted); margin-left: 8px;">🕒 更新于 ${timeAgo(repo.lastRelease.publishedAt)}</span>` : ''}
                 </div>
                 ${hasRelease ? `
-                  <button class="btn btn-sm ${summary ? 'btn-secondary' : 'btn-primary'}" id="btn-summary-${repo.id}" onclick="generateSummaryHandler('${repo.id}')">
+                  <button class="btn btn-sm ${summary ? 'btn-secondary' : 'btn-ai'}" id="btn-summary-${repo.id}" onclick="generateSummaryHandler('${repo.id}')">
                     ${summary ? '🔄 重新生成' : '✨ 生成总结'}
                   </button>
                 ` : ''}
               </div>
 
               ${summary ? `
-                <details class="summary-content" open>
+                <details class="summary-content">
                   <summary class="summary-content-label" style="cursor: pointer; user-select: none; margin-bottom: 0;">
-                    <div>🤖 AI 总结 <span style="color: var(--text-muted); font-weight: 400;">· ${timeAgo(summary.generatedAt)}</span></div>
+                    <div><span class="ai-gradient-text">🤖 AI 智能总结</span> <span style="color: var(--text-muted); font-weight: 400; margin-left: 8px;">更新于 ${timeAgo(summary.generatedAt)}</span></div>
                   </summary>
-                  <div class="summary-body" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);">${renderMarkdown(summary.content)}</div>
+                  <div class="summary-body" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(168, 85, 247, 0.15);">${renderMarkdown(summary.content)}</div>
                 </details>
               ` : ''}
 
