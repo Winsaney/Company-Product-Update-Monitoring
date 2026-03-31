@@ -181,7 +181,11 @@ function showToast(message, type = 'info') {
   const container = document.getElementById('toast-container');
   const toast = document.createElement('div');
   toast.className = `toast ${type}`;
-  toast.innerHTML = `${type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️'} ${message}`;
+  let icon = '';
+  if (type === 'success') icon = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--success)" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M20 6L9 17l-5-5"/></svg>`;
+  else if (type === 'error') icon = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--danger)" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 9l-6 6M9 9l6 6"/></svg>`;
+  else icon = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--accent-light)" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`;
+  toast.innerHTML = `<div style="display:flex;align-items:center;">${icon}</div> <span>${message}</span>`;
   container.appendChild(toast);
   setTimeout(() => toast.remove(), 3000);
 }
@@ -542,7 +546,7 @@ function renderSummary() {
                   <summary class="summary-content-label" style="cursor: pointer; user-select: none; margin-bottom: 0;">
                     <div><span class="ai-gradient-text">🤖 AI 智能总结</span> <span style="color: var(--text-muted); font-weight: 400; margin-left: 8px;">更新于 ${timeAgo(summary.generatedAt)}</span></div>
                   </summary>
-                  <div class="summary-body" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(168, 85, 247, 0.15);">${renderMarkdown(summary.content)}</div>
+                  <div class="summary-body" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--accent-glow);">${renderMarkdown(summary.content)}</div>
                 </details>
               ` : ''}
 
@@ -663,7 +667,7 @@ function renderSettings() {
     <div style="display: flex; gap: 12px; margin-top: 8px;">
       <button class="btn btn-primary" onclick="saveSettingsHandler()">💾 保存设置</button>
       <button class="btn btn-secondary" onclick="app.testEmail()">📧 发送测试邮件</button>
-      <button class="btn btn-secondary" id="btn-test-llm" onclick="app.testLLM()">🧪 测试 LLM 连接</button>
+      <button class="btn btn-ai" id="btn-test-llm" onclick="app.testLLM()">🧪 测试 LLM 连接</button>
     </div>
   `;
 }
