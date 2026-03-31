@@ -91,6 +91,19 @@ function saveSummary(repoId, summary) {
   saveJSON('summaries.json', summaries);
 }
 
+function getWeeklySummaries() {
+  return loadJSON('weekly-summaries.json', []);
+}
+
+function saveWeeklySummary(entry) {
+  const summaries = getWeeklySummaries();
+  summaries.unshift(entry);
+  // Keep last 50 weekly summaries
+  if (summaries.length > 50) summaries.length = 50;
+  saveJSON('weekly-summaries.json', summaries);
+  return entry;
+}
+
 // ─── GitHub API ──────────────────────────────────────────
 async function fetchLatestRelease(owner, repo, token) {
   const url = `https://api.github.com/repos/${owner}/${repo}/releases/latest`;
@@ -122,6 +135,44 @@ async function fetchLatestRelease(owner, repo, token) {
     htmlUrl: data.html_url,
     author: data.author ? data.author.login : 'unknown'
   };
+}
+
+// Fetch all releases from the past N days
+async function fetchRecentReleases(owner, repo, token, sinceDays = 7) {
+  const url = `https://api.github.com/repos/${owner}/${repo}/releases?per_page=30`;
+  const headers = {
+    'Accept': 'application/vnd.github.v3+json',
+    'User-Agent': 'GitHub-Release-Monitor'
+  };
+  if (token) {
+    headers['Authorization'] = `token ${token}`;
+  }
+
+  const response = await fetch(url, { headers });
+
+  if (response.status === 404) {
+    return []; // No releases
+  }
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`GitHub API error ${response.status}: ${text}`);
+  }
+
+  const data = await response.json();
+  const sinceDate = new Date();
+  sinceDate.setDate(sinceDate.getDate() - sinceDays);
+
+  return data
+    .filter(r => new Date(r.published_at) >= sinceDate)
+    .map(r => ({
+      tagName: r.tag_name,
+      name: r.name || r.tag_name,
+      body: r.body || '',
+      publishedAt: r.published_at,
+      htmlUrl: r.html_url,
+      author: r.author ? r.author.login : 'unknown'
+    }));
 }
 
 // ─── LLM API (OpenAI Compatible) ──────────────────────────────────────────
@@ -548,6 +599,145 @@ app.post('/api/summary/:repoId', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// ─── Weekly Summary Routes ──────────────────────────────────────────
+
+// Get releases from the past 7 days for all repos
+app.get('/api/weekly-releases', async (req, res) => {
+  const repos = getRepos();
+  const settings = getSettings();
+  const results = [];
+
+  for (const repo of repos) {
+    try {
+      const [owner, name] = repo.fullName.split('/');
+      const releases = await fetchRecentReleases(owner, name, settings.githubToken, 7);
+      if (releases.length > 0) {
+        results.push({
+          repoFullName: repo.fullName,
+          releases
+        });
+      }
+    } catch (err) {
+      console.error(`  获取 ${repo.fullName} 近期 Release 失败:`, err.message);
+    }
+  }
+
+  res.json(results);
+});
+
+// Generate weekly summary
+app.post('/api/weekly-summary', async (req, res) => {
+  const repos = getRepos();
+  const settings = getSettings();
+
+  if (!settings.llm || !settings.llm.apiUrl || !settings.llm.apiKey) {
+    return res.status(400).json({ error: '请先在设置中配置 AI 大模型的 API 地址和 Key' });
+  }
+
+  if (repos.length === 0) {
+    return res.status(400).json({ error: '暂无监控仓库' });
+  }
+
+  try {
+    // Collect recent releases from all repos
+    const allReleases = [];
+    for (const repo of repos) {
+      try {
+        const [owner, name] = repo.fullName.split('/');
+        const releases = await fetchRecentReleases(owner, name, settings.githubToken, 7);
+        if (releases.length > 0) {
+          allReleases.push({ repoFullName: repo.fullName, releases });
+        }
+      } catch (err) {
+        console.error(`  获取 ${repo.fullName} 近期 Release 失败:`, err.message);
+      }
+    }
+
+    if (allReleases.length === 0) {
+      return res.status(400).json({ error: '过去一周内没有任何仓库发布新版本' });
+    }
+
+    // Build prompt
+    const now = new Date();
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const dateRange = `${weekAgo.toLocaleDateString('zh-CN')} - ${now.toLocaleDateString('zh-CN')}`;
+
+    let releaseDetails = '';
+    for (const item of allReleases) {
+      releaseDetails += `\n## ${item.repoFullName}\n`;
+      for (const r of item.releases) {
+        releaseDetails += `\n### ${r.tagName} (${r.name}) - ${new Date(r.publishedAt).toLocaleDateString('zh-CN')}\n`;
+        releaseDetails += r.body ? r.body.substring(0, 800) : '无详细说明';
+        releaseDetails += '\n';
+      }
+    }
+
+    const prompt = `以下是我监控的开源项目在 ${dateRange} 这一周内发布的所有新版本信息。请生成一份综合性的每周开源动态周报。\n\n---\n${releaseDetails}`;
+
+    // Use a specialized system prompt for weekly reports
+    const { llm } = settings;
+    const apiUrl = normalizeApiUrl(llm.apiUrl);
+    let modelName = llm.model || 'gpt-3.5-turbo';
+    if (modelName.toLowerCase().includes('deepseek')) {
+      modelName = modelName.toLowerCase();
+    }
+
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${llm.apiKey}`
+      },
+      body: JSON.stringify({
+        model: modelName,
+        messages: [
+          {
+            role: 'system',
+            content: '你是一个专业的开源技术周报编辑。请根据提供的各项目 Release Notes，撰写一份结构清晰、简洁易读的中文每周开源动态总结。要求：1. 按项目分组汇总，每个项目列出核心变更要点；2. 在文首给出一段整体概览（约2-3句话，总结本周亮点）；3. 使用 Markdown 格式输出，重要更新用加粗标记；4. 如有破坏性变更（Breaking Changes），请特别标注提醒。'
+          },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.3,
+        max_tokens: 2000
+      })
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`LLM API 错误 ${response.status}: ${text}`);
+    }
+
+    const data = await response.json();
+    if (!data.choices || !data.choices[0]) {
+      throw new Error('LLM API 返回格式异常');
+    }
+
+    const content = data.choices[0].message.content;
+
+    const entry = {
+      id: Date.now().toString(),
+      dateRange,
+      startDate: weekAgo.toISOString(),
+      endDate: now.toISOString(),
+      repoCount: allReleases.length,
+      releaseCount: allReleases.reduce((sum, r) => sum + r.releases.length, 0),
+      repos: allReleases.map(r => r.repoFullName),
+      content,
+      generatedAt: now.toISOString()
+    };
+
+    saveWeeklySummary(entry);
+    res.json(entry);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get all weekly summaries
+app.get('/api/weekly-summaries', (req, res) => {
+  res.json(getWeeklySummaries());
 });
 
 // ─── Start Server ──────────────────────────────────────────

@@ -4,6 +4,7 @@ const app = {
   settings: {},
   history: [],
   summaries: {},
+  weeklySummaries: [],
 
   async api(method, url, body) {
     const opts = { method, headers: { 'Content-Type': 'application/json' } };
@@ -57,10 +58,20 @@ const app = {
     this.summaries = await this.api('GET', '/api/summaries');
   },
 
+  async loadWeeklySummaries() {
+    this.weeklySummaries = await this.api('GET', '/api/weekly-summaries');
+  },
+
   async generateSummary(repoId) {
     const summary = await this.api('POST', `/api/summary/${repoId}`);
     this.summaries[repoId] = summary;
     return summary;
+  },
+
+  async generateWeeklySummary() {
+    const result = await this.api('POST', '/api/weekly-summary');
+    this.weeklySummaries.unshift(result);
+    return result;
   },
 
   async addRepo(fullName) {
@@ -380,6 +391,7 @@ function renderHistory() {
 
 function renderSummary() {
   const hasLLM = app.settings.llm && app.settings.llm.apiUrl && app.settings.llm.apiKey;
+  const latestWeekly = app.weeklySummaries.length > 0 ? app.weeklySummaries[0] : null;
 
   return `
     <div class="page-header">
@@ -404,6 +416,74 @@ function renderSummary() {
         <p>前往「仓库管理」添加想要监控的 GitHub 仓库</p>
       </div>
     ` : `
+      <!-- Weekly Summary Section -->
+      <div class="weekly-summary-section">
+        <div class="weekly-summary-header">
+          <div class="weekly-summary-title">
+            <div class="weekly-icon-wrapper">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            </div>
+            <div>
+              <h3>📊 每周动态总结</h3>
+              <p>汇总监控的开源产品一周内的版本发布动态</p>
+            </div>
+          </div>
+          <button class="btn btn-weekly" id="btn-weekly-summary" onclick="generateWeeklySummaryHandler()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M12 2a4 4 0 014 4c0 1.95-1.4 3.58-3.25 3.93L12 10l-.75-.07A4.001 4.001 0 0112 2z"/><path d="M9 10h6v2a3 3 0 01-6 0v-2z"/><path d="M8 18h8"/><path d="M9 21h6"/></svg>
+            ${latestWeekly ? '🔄 重新生成周报' : '✨ 生成本周总结'}
+          </button>
+        </div>
+
+        ${latestWeekly ? `
+          <div class="weekly-summary-content">
+            <div class="weekly-summary-meta">
+              <span class="weekly-meta-item">📅 ${latestWeekly.dateRange}</span>
+              <span class="weekly-meta-item">📦 ${latestWeekly.repoCount} 个项目有更新</span>
+              <span class="weekly-meta-item">🏷️ 共 ${latestWeekly.releaseCount} 个新版本</span>
+              <span class="weekly-meta-item">⏰ 生成于 ${timeAgo(latestWeekly.generatedAt)}</span>
+            </div>
+            <details class="weekly-report-details" open>
+              <summary class="weekly-report-toggle">
+                <span class="ai-gradient-text">🤖 AI 每周周报</span>
+                <span class="weekly-report-arrow">▼</span>
+              </summary>
+              <div class="weekly-report-body">${renderMarkdown(latestWeekly.content)}</div>
+            </details>
+          </div>
+        ` : `
+          <div class="weekly-empty">
+            <p>📋 尚未生成每周总结，点击右上方按钮生成本周开源动态周报</p>
+          </div>
+        `}
+
+        ${app.weeklySummaries.length > 1 ? `
+          <details class="weekly-history">
+            <summary class="weekly-history-toggle">📂 查看历史周报 (${app.weeklySummaries.length - 1} 份)</summary>
+            <div class="weekly-history-list">
+              ${app.weeklySummaries.slice(1).map((ws, i) => `
+                <details class="weekly-history-item">
+                  <summary>
+                    <div class="weekly-history-item-meta">
+                      <span class="weekly-history-date">📅 ${ws.dateRange}</span>
+                      <span class="weekly-history-stats">${ws.repoCount} 项目 · ${ws.releaseCount} 版本</span>
+                    </div>
+                    <span style="font-size: 11px; color: var(--text-muted);">${formatDate(ws.generatedAt)}</span>
+                  </summary>
+                  <div class="weekly-report-body" style="padding: 16px 20px;">${renderMarkdown(ws.content)}</div>
+                </details>
+              `).join('')}
+            </div>
+          </details>
+        ` : ''}
+      </div>
+
+      <!-- Separator -->
+      <div style="margin: 32px 0 24px; display: flex; align-items: center; gap: 16px;">
+        <div style="flex: 1; height: 1px; background: var(--border);"></div>
+        <span style="font-size: 13px; color: var(--text-muted); font-weight: 500;">单仓库总结</span>
+        <div style="flex: 1; height: 1px; background: var(--border);"></div>
+      </div>
+
       <div class="summary-grid">
         ${app.repos.map((repo, i) => {
           const summary = app.summaries[repo.id];
@@ -672,6 +752,25 @@ async function generateSummaryHandler(repoId) {
   }
 }
 
+async function generateWeeklySummaryHandler() {
+  const btn = document.getElementById('btn-weekly-summary');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinning-inline">⏳</span> 正在收集数据并生成周报...';
+  }
+  try {
+    await app.generateWeeklySummary();
+    showToast('每周总结生成成功！', 'success');
+    router.render();
+  } catch (err) {
+    showToast('生成失败: ' + err.message, 'error');
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '✨ 生成本周总结';
+    }
+  }
+}
+
 async function loginHandler() {
   const pwdInput = document.getElementById('input-password');
   const btn = document.getElementById('btn-login');
@@ -692,7 +791,8 @@ async function loginHandler() {
         app.loadRepos(),
         app.loadSettings(),
         app.loadHistory(),
-        app.loadSummaries()
+        app.loadSummaries(),
+        app.loadWeeklySummaries()
       ]);
       router.render();
       showToast('登录成功', 'success');
@@ -762,7 +862,8 @@ window.addEventListener('hashchange', () => router.render());
         app.loadRepos(),
         app.loadSettings(),
         app.loadHistory(),
-        app.loadSummaries()
+        app.loadSummaries(),
+        app.loadWeeklySummaries()
       ]);
     } catch (err) {
       console.error('初始化失败:', err);
