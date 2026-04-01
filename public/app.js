@@ -483,7 +483,7 @@ function renderSummary() {
             </div>
             <details class="weekly-report-details" open>
               <summary class="weekly-report-toggle">
-                <span class="ai-gradient-text">🤖 AI 每周周报</span>
+                <span>📄 AI 每周周报</span>
                 <span class="weekly-report-arrow">▼</span>
               </summary>
               <div class="weekly-report-body">${renderMarkdown(latestWeekly.content)}</div>
@@ -544,7 +544,7 @@ function renderSummary() {
               ${summary ? `
                 <details class="summary-content">
                   <summary class="summary-content-label" style="cursor: pointer; user-select: none; margin-bottom: 0;">
-                    <div><span class="ai-gradient-text">🤖 AI 智能总结</span> <span style="color: var(--text-muted); font-weight: 400; margin-left: 8px;">更新于 ${timeAgo(summary.generatedAt)}</span></div>
+                    <div>📄 AI 智能总结 <span style="color: var(--text-muted); font-weight: 400; margin-left: 8px;">更新于 ${timeAgo(summary.generatedAt)}</span></div>
                   </summary>
                   <div class="summary-body" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--accent-glow);">${renderMarkdown(summary.content)}</div>
                 </details>
